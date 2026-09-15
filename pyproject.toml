@@ -1,0 +1,61 @@
+[project]
+name = "recoup"
+version = "0.4.0"
+description = "Deterministic multi-source reconciliation control plane with LLM triage and policy-gated recovery. Built for the Razorpay AI Builder track."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+authors = [
+    { name = "Harsh Kharavle", email = "harshcodek@gmail.com" },
+]
+keywords = [
+    "reconciliation",
+    "fintech",
+    "agent",
+    "mcp",
+    "rag",
+    "triage",
+    "razorpay",
+    "audit",
+    "policy-engine",
+    "control-plane",
+]
+
+# Runtime deps — kept lean. No framework lock-in.
+dependencies = [
+    "pydantic>=2.0",
+    "python-dateutil>=2.8",
+    "pyyaml>=6.0",
+    "rich>=13.0",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+# Real LLM provider SDKs are optional; the OpenAI-compatible route (httpx)
+# is what this project's evaluation runs against by default.
+anthropic = ["anthropic>=0.39"]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+]
+
+[project.scripts]
+recoup-eval = "eval:run_evaluation"
+recoup-mcp = "src.mcp_server:serve"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["src", "fixtures"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "-q --tb=short"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
