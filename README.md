@@ -117,6 +117,10 @@ PYTHONPATH=. python scripts/live_llm_smoke.py
 
 # 7. (Optional) run the MCP server
 PYTHONPATH=. python -m src.mcp_server
+
+# 8. (Optional) run the web dashboard
+PYTHONPATH=. python -m src.web_dashboard
+open http://localhost:8300
 ```
 
 ---
@@ -124,6 +128,32 @@ PYTHONPATH=. python -m src.mcp_server
 ## Repository layout
 
 ```
+recoup/
+├── src/            # pipeline + audit + policy + MCP
+├── fixtures/       # deterministic 3000-txn generator
+├── tests/          # 153 tests
+├── web/            # web dashboard assets
+└── scripts/        # e2e smoke tests
+```
+
+---
+
+## Web dashboard
+
+A zero-dependency web dashboard serves the audit trail with live refresh:
+
+```
+PYTHONPATH=. python -m src.web_dashboard
+# opens http://localhost:8300
+```
+
+Shows: pipeline stats, audit trail (last 50 events), exception breakdown,
+and a one-click "Re-run demo" that regenerates 3,000 transactions and
+recomputes the full chain.
+
+---
+
+## What Recoup does NOT do
 recoup/
 ├── README.md                   # this file
 ├── pyproject.toml              # project metadata + tool config
