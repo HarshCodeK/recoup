@@ -73,72 +73,70 @@ def fetch_txn_events(txn_id):
 HTML = """<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Recoup — Web Dashboard</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<style>
-:root{--bg:#0b0f14;--card:#121822;--line:rgba(31,42,55,.6);--text:#e5e7eb;--muted:#9ca3af;--accent:#3b82f6;--ok:#22c55e;--bad:#ef4444;--warn:#f59e0b;font-family:Inter,system-ui,sans-serif}
-*{box-sizing:border-box;margin:0;padding:0}body{background:var(--bg);color:var(--text)}
-.wrap{max-width:1200px;margin:0 auto;padding:24px}
-header{border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:24px}
-header .name{font-weight:800;font-size:18px;background:linear-gradient(135deg,#e5e7eb,var(--accent));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-header .sub{color:var(--muted);font-size:13px;margin-top:2px}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:24px}
-.stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px}
-.stat .v{font-size:24px;font-weight:700;font-family:ui-monospace}
-.stat .l{font-size:11px;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:.5px}
-.stat .accent{color:var(--accent)}
-.stat .ok{color:var(--ok)}
-.stat .warn{color:var(--warn)}
-.stat .bad{color:var(--bad)}
-.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:24px}
-.panel h3{font-size:14px;font-weight:600;margin-bottom:12px}
-table{width:100%;border-collapse:collapse}
-th,td{padding:6px 12px;text-align:left;border-bottom:1px solid var(--line);font-size:12px;font-family:ui-monospace}
-th{color:var(--muted);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.5px}
-td{color:var(--muted)}
-tr:hover{background:rgba(31,42,55,.3)}
-.badge{display:inline-block;font-size:10px;padding:2px 6px;border-radius:4px}
-.badge.ok{background:rgba(34,197,94,.12);color:var(--ok)}
-.badge.reject{background:rgba(239,68,68,.12);color:var(--bad)}
-.badge.warn{background:rgba(245,154,11,.12);color:var(--warn)}
-code{font-family:ui-monospace;font-size:11px;background:rgba(255,255,255,.04);padding:2px 6px;border-radius:4px}
-.btn{background:var(--accent);color:#fff;border:0;padding:8px 16px;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px}
-.btn:hover{background:#60a5fa}
-.muted{color:var(--muted);font-size:13px}
-.chain-ok{color:var(--ok)}
-.chain-bad{color:var(--bad)}
-</style></head><body>
+<title>Recoup — Reconciliation Control Plane</title>
+<meta name="description" content="Deterministic multi-source payment reconciliation. Rule engine, probabilistic matching, LLM triage that can refuse, hash-chained audit.">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/house-ui.css">
+</head><body>
+<header class="topbar"><div class="wrap">
+  <a class="brand" href="/"><span class="mark">◈</span> Recoup</a>
+  <nav class="topnav"><a href="#pipeline" class="active">Pipeline</a><a href="#audit-panel">Audit</a><a href="#exceptions-panel">Exceptions</a><a href="https://github.com/HarshCodeK/recoup">GitHub</a></nav>
+</div></header>
 <div class="wrap">
-  <header><div class="name">Recoup</div><div class="sub">Multi-source reconciliation control plane — web dashboard</div></header>
+  <div class="hero">
+    <span class="eyebrow"><span class="dot"></span>153 tests green · SHA-256 hash-chained audit</span>
+    <h1>LLM can triage. <span class="grad">LLM cannot move money.</span></h1>
+    <p class="lead">Deterministic reconciliation across 5 sources. Rules first, probability second, LLM only for the ambiguous — and every step lands in a tamper-evident log.</p>
+  </div>
 
   <div class="stats" id="stats">
     <div class="stat"><div class="v" id="stat-total">0</div><div class="l">Transactions</div></div>
-    <div class="stat"><div class="v ok" id="stat-matched">0</div><div class="l">Auto-matched</div></div>
-    <div class="stat"><div class="v warn" id="stat-exc">0</div><div class="l">Exceptions</div></div>
-    <div class="stat"><div class="v accent" id="stat-rate">0%</div><div class="l">Auto-match rate</div></div>
+    <div class="stat"><div class="v green" id="stat-matched">0</div><div class="l">Auto-matched</div></div>
+    <div class="stat"><div class="v amber" id="stat-exc">0</div><div class="l">Exceptions</div></div>
+    <div class="stat"><div class="v blue" id="stat-rate">0%</div><div class="l">Auto-match rate</div></div>
     <div class="stat"><div class="v" id="stat-events">0</div><div class="l">Audit events</div></div>
-    <div class="stat"><div class="v chain-ok" id="stat-chain">✓</div><div class="l">Chain integrity</div></div>
+    <div class="stat"><div class="v green" id="stat-chain">✓</div><div class="l">Chain integrity</div></div>
   </div>
 
-  <div class="panel">
-    <h3>Audit trail (last 50 events)</h3>
-    <button class="btn" style="float:right;margin-top:-28px" onclick="runDemo()">Re-run demo</button>
-    <div id="audit"></div>
-  </div>
+  <section id="pipeline">
+    <h2>Pipeline</h2>
+    <p class="sub">Five stages. The first two must be right; the LLM is allowed to be wrong safely.</p>
+    <div class="stepper">
+      <div class="pstep done"><div class="node">◉</div><div class="lbl">Normalize</div><div class="desc">5 sources → 1 schema</div></div>
+      <div class="pstep done"><div class="node">⧉</div><div class="lbl">Rules</div><div class="desc">exact-match engine</div></div>
+      <div class="pstep done"><div class="node">◈</div><div class="lbl">Probability</div><div class="desc">Jaccard scoring</div></div>
+      <div class="pstep done"><div class="node">✋</div><div class="lbl">Triage</div><div class="desc">LLM · can refuse</div></div>
+      <div class="pstep done"><div class="node">🧾</div><div class="lbl">Audit</div><div class="desc">hash-chained</div></div>
+    </div>
+    <div class="card"><h3>▶ Demo <span class="spacer"></span><button class="btn sm" id="demo-btn" onclick="runDemo()">Re-run 3,000-txn pipeline</button></h3>
+      <p class="muted">Regenerates the deterministic dataset (seed 42), reruns rule → probability → classify → diagnose, rebuilds the chain.</p>
+    </div>
+  </section>
 
-  <div class="panel">
-    <h3>Exception breakdown</h3>
-    <div id="exceptions"></div>
-  </div>
+  <section id="audit-panel">
+    <h2>Audit trail</h2>
+    <p class="sub">Last 50 events, live. Click any row to inspect its payload.</p>
+    <div class="card"><h3>◈ Events <span class="spacer"></span><span class="pill ok" id="chain-pill">chain: checking…</span></h3>
+      <div id="audit"></div>
+      <div class="banner" id="txn-detail" style="display:none;margin-top:12px"></div>
+    </div>
+  </section>
+
+  <section id="exceptions-panel">
+    <h2>Exception breakdown</h2>
+    <p class="sub">What the engines could not auto-match, by reason.</p>
+    <div class="card"><h3>⚠ Queue</h3><div id="exceptions"></div></div>
+  </section>
 </div>
+<footer><div class="wrap"><a href="https://github.com/HarshCodeK/recoup">github.com/HarshCodeK/recoup</a><span style="float:right" class="muted">MIT · deterministic money math</span></div></footer>
 
 <script>
 async function fetchJSON(url){const r=await fetch(url);if(!r.ok)throw new Error(r.status);return r.json();}
 
 async function runDemo(){
-  const btn=document.querySelector('button');btn.disabled=true;btn.textContent="Running pipeline…";
-  try{const r=await fetchJSON('/api/run-demo');updateStats(r);}catch(e){btn.textContent="Failed";}
-  btn.disabled=false;btn.textContent="Re-run demo";
+  const btn=document.getElementById('demo-btn');btn.disabled=true;btn.innerHTML='<span class="spin"></span> Running pipeline…';
+  try{const r=await fetchJSON('/api/run-demo');updateStats(r);await renderAudit();}catch(e){btn.textContent="Failed — retry";}
+  btn.disabled=false;btn.textContent="Re-run 3,000-txn pipeline";
 }
 
 function updateStats(s){
@@ -147,29 +145,44 @@ function updateStats(s){
   document.getElementById("stat-exc").textContent=s.exceptions;
   document.getElementById("stat-rate").textContent=s.auto_match_rate+"%";
   document.getElementById("stat-events").textContent=s.event_count;
-  document.getElementById("stat-chain").textContent=s.chain_ok?"✓ Chain intact":"✗ Broken";
-  document.getElementById("stat-chain").className=s.chain_ok?"chain-ok":"chain-bad";
+  const ch=document.getElementById("stat-chain");
+  ch.textContent=s.chain_ok?"✓":"✗"; ch.className='v '+(s.chain_ok?'green':'red');
+  const pill=document.getElementById("chain-pill");
+  pill.textContent=s.chain_ok?"chain: intact":"chain: BROKEN"; pill.className='pill '+(s.chain_ok?'ok':'bad');
+  const exc=document.getElementById("exceptions");
+  if(exc && s.exceptions!=null){
+    exc.innerHTML=`<div style="display:flex;gap:14px;align-items:center"><div style="font-family:var(--mono);font-size:26px">${s.exceptions}</div>
+    <div class="muted">open exceptions · ${s.refused||0} LLM refusals (safe) · match rate ${s.auto_match_rate}%</div></div>`;
+  }
+}
+
+function showTxn(seq, type, txn, time, payload){
+  const d=document.getElementById("txn-detail");
+  d.style.display='block';
+  d.innerHTML=`<b>#${seq} ${type}</b> · ${txn||'global'} · ${time}<br/><span class="muted">${payload}</span>`;
+  d.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 
 async function renderAudit(){
   try{
     const events=await fetchJSON('/api/events?limit=50');
     document.getElementById("audit").innerHTML=events.length===0
-      ?'<p class="muted">No events yet. Run the demo to populate the audit trail.</p>'
-      :'<table><thead><tr><th>#</th><th>Type</th><th>Txn</th><th>Time</th><th>Payload</th></tr></thead><tbody>'+
-      events.map(e=>`<tr>
-        <td>#${e.seq}</td>
-        <td><span class="badge ${e.event_type.includes('reject')||e.event_type.includes('violation')?'reject':'ok'}">${e.event_type}</span></td>
-        <td>${e.txn_id||"<span class='muted'>global</span>"}</td>
-        <td>${new Date(e.created_at).toLocaleTimeString()}</td>
-        <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${JSON.stringify(e.payload).slice(0,120)}</td>
-      </tr>`).join("")+"</tbody></table>";
+      ?'<p class="empty">No events yet. Run the demo to populate the audit trail.</p>'
+      :'<table class="hu"><thead><tr><th>#</th><th>Type</th><th>Txn</th><th>Time</th><th>Payload</th></tr></thead><tbody>'+
+      events.map(e=>{const bad=/reject|violation|refus|fail/.test(e.event_type);const full=JSON.stringify(e.payload).replace(/</g,'&lt;');
+        return`<tr class="clickable" onclick='showTxn(${e.seq},"${e.event_type}","${e.txn_id||''}","${new Date(e.created_at).toLocaleTimeString()}","${full.slice(0,400)}")'>
+        <td class="muted">#${e.seq}</td>
+        <td><span class="pill ${bad?'bad':'ok'}">${e.event_type}</span></td>
+        <td class="mono">${e.txn_id||"<span class='muted'>global</span>"}</td>
+        <td class="muted">${new Date(e.created_at).toLocaleTimeString()}</td>
+        <td class="muted" style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${full.slice(0,110)}</td>
+      </tr>`;}).join("")+"</tbody></table>";
   }catch(e){
-    document.getElementById("audit").innerHTML='<p class="muted">Backend not started</p>';
+    document.getElementById("audit").innerHTML='<p class="empty">Dashboard server not running.</p>';
   }
 }
 
-async function init(){try{const s=await fetchJSON('/api/stats');updateStats(s);}catch(e){}await renderAudit();setInterval(()=>{renderAudit()},3000);}
+async function init(){try{const s=await fetchJSON('/api/stats');updateStats(s);}catch(e){}await renderAudit();setInterval(async()=>{try{const s=await fetchJSON('/api/stats');updateStats(s);}catch(e){}await renderAudit();},4000);}
 init();
 </script>
 </body></html>
@@ -184,6 +197,16 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/" or path == "/dashboard":
             self._send_html(HTML)
+        elif path == "/assets/house-ui.css":
+            css_path = Path(__file__).resolve().parent.parent / "web" / "assets" / "house-ui.css"
+            if css_path.is_file():
+                self.send_response(200)
+                self.send_header("Content-Type", "text/css;charset=utf-8")
+                self.end_headers()
+                self.wfile.write(css_path.read_bytes())
+            else:
+                self.send_response(404)
+                self.end_headers()
         elif path == "/api/stats":
             self._send_json(_safe_stats())
         elif path == "/api/events":
