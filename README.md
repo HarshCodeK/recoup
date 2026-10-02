@@ -48,13 +48,13 @@ The flow is end-to-end and real:
                 └──────────────────────────────────────┘
 ```
 
-Every layer "can be wrong safely" except the two that must be right
-(policy, state transitions). Everything is logged in a tamper-evident
-SHA-256 hash-chained audit store.
+The pipeline is designed so deterministic policy/state controls constrain recovery, while the LLM only provides typed triage. The evaluation writes key match, exception, and diagnosis events to an append-only, SHA-256 hash-chained audit store.
 
 ---
 
 ## Real numbers (measured, reproducible)
+
+The pair-level matching metrics must be regenerated with the current evaluator; the older transaction-level figures are intentionally not carried forward.
 
 From `python eval.py` (default = 3000 transactions, seed=42, deterministic):
 
@@ -68,9 +68,9 @@ From `python eval.py` (default = 3000 transactions, seed=42, deterministic):
 | Recovery proposed | 823 |
 | Recovery **allowed** by policy | **292** (35.5% of proposed) |
 | Recovery **blocked** by policy | **531** (64.5% of proposed) |
-| **Precision vs ground truth** | **0.674** |
-| **Recall vs ground truth** | **0.999** |
-| **F1** | **0.805** |
+| **Pair precision vs ground truth** | **regenerate with current `python eval.py`** |
+| **Pair recall vs ground truth** | **regenerate with current `python eval.py`** |
+| **Pair F1** | **regenerate with current `python eval.py`** |
 | Audit events recorded | **3013** |
 | Audit chain integrity | **OK** |
 | Test suite | **162 / 162 passing** in ~10 s |
@@ -85,7 +85,7 @@ Reproducible — re-run produces identical numbers (seed=42).
 - **Auto-matches** using a deterministic rule engine + a bounded probabilistic engine (Jaccard on reference tokens).
 - **Classifies** what cannot be auto-matched into typed reasons (`amount_mismatch`, `missing_reference`, `timing_window`, `duplicate_fire`, `missing_txn`, `ambiguous`, `standalone_recurring`).
 - **Triages ambiguous cases with an LLM** — typed, schema-enforced, never tools, never money authority. Refuses honestly if uncertain.
-- **Gates recovery with a policy engine** — economic floor (₹5.00), max cap (₹10,00,000.00), reason blacklist, manual-approval threshold.
+- **Gates recovery with a policy engine** — economic floor (₹100), max cap (₹10,000), and reason blacklist.
 - **Persists state in an FSM** where `UNKNOWN` is first-class (never silently retried).
 - **Records everything** in a SHA-256 hash-chained SQLite audit log; tampering is detected by `verify_chain()`.
 - **Exposes 5 tools over MCP** (JSON-RPC 2.0 over stdio) for an external agent to drive the pipeline.
