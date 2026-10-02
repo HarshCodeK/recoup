@@ -84,32 +84,26 @@ def run_evaluation(dataset_size: int = 3000, seed: int = 42) -> EvalReport:
         chain_ok, broken_at = store.verify_chain()
         event_count = len(store.get_all_events())
 
-    # Compute precision/recall against ground truth
-    matched_ids = set()
+    # Compute true pair-level precision/recall against ground truth.
+    def norm_pair(a, b):
+        return tuple(sorted((a, b)))
+
+    predicted_pairs = set()
     for d in result.rule_decisions:
         if d.matched:
-            matched_ids.add(d.txn_id_a)
-            matched_ids.add(d.txn_id_b)
+            predicted_pairs.add(norm_pair(d.txn_id_a, d.txn_id_b))
     for d in result.prob_decisions:
         if d.matched:
-            matched_ids.add(d.txn_id_a)
-            matched_ids.add(d.txn_id_b)
+            predicted_pairs.add(norm_pair(d.txn_id_a, d.txn_id_b))
 
-    gt_match_pairs = [(a, b) for (a, b, outcome) in ground_truth if outcome == "match"]
-    gt_match_ids = set()
-    for a, b in gt_match_pairs:
-        gt_match_ids.add(a)
-        gt_match_ids.add(b)
-
-    if gt_match_ids:
-        tp = len(matched_ids & gt_match_ids)
-        fp = len(matched_ids - gt_match_ids)
-        fn = len(gt_match_ids - matched_ids)
-        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
-    else:
-        precision = recall = f1 = 0.0
+    gt_match_pairs = [norm_pair(a, b) for (a, b, outcome) in ground_truth if outcome == "match"]
+    gt_pairs = set(gt_match_pairs)
+    tp = len(predicted_pairs & gt_pairs)
+    fp = len(predicted_pairs - gt_pairs)
+    fn = len(gt_pairs - predicted_pairs)
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
 
     auto_matched = result.report.rule_matched + result.report.prob_matched
     return EvalReport(
@@ -173,9 +167,9 @@ def format_report(report: EvalReport) -> str:
     lines.extend([
         "",
         "─── Precision / Recall vs Ground Truth ───",
-        f"Precision:               {report.precision_estimate:.3f}",
-        f"Recall:                  {report.recall_estimate:.3f}",
-        f"F1:                      {report.f1_estimate:.3f}",
+        f"Pair precision:          {report.precision_estimate:.3f}",
+        f"Pair recall:             {report.recall_estimate:.3f}",
+        f"Pair F1:                 {report.f1_estimate:.3f}",
         "",
         "─── Audit Trail (SHA-256 hash-chained) ───",
         f"Events recorded:         {report.audit_events_recorded}",
