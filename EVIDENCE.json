@@ -1,0 +1,60 @@
+{
+  "repo": "recoup",
+  "tier": "S",
+  "domain": "multi-source payment reconciliation control plane",
+  "gate": {
+    "tests_passed": 162,
+    "tests_failed": 0,
+    "pytest_exit": 0,
+    "ci": "local only (no CI configured)",
+    "docker": "none"
+  },
+  "headline": [
+    {
+      "label": "eval F1",
+      "value": "0.805",
+      "command": "PYTHONPATH=. python eval.py",
+      "tone": "accent"
+    },
+    {
+      "label": "tests passing",
+      "value": "162",
+      "command": "python -m pytest tests/ -q",
+      "tone": "info"
+    },
+    {
+      "label": "recovery recall",
+      "value": "0.999",
+      "command": "PYTHONPATH=. python eval.py",
+      "tone": ""
+    }
+  ],
+  "rows": [
+    {
+      "metric": "offline test suite",
+      "value": 162,
+      "command": "python -m pytest tests/ -q"
+    },
+    {
+      "metric": "eval precision (3000 txns, seed=42)",
+      "value": 0.674,
+      "command": "PYTHONPATH=. python eval.py"
+    },
+    {
+      "metric": "eval recall",
+      "value": 0.999,
+      "command": "PYTHONPATH=. python eval.py"
+    },
+    {
+      "metric": "eval F1",
+      "value": 0.805,
+      "command": "PYTHONPATH=. python eval.py"
+    },
+    {
+      "metric": "policy-blocked recoveries",
+      "value": 531,
+      "command": "PYTHONPATH=. python eval.py"
+    }
+  ],
+  "source": "measured 2026-10-03"
+}
