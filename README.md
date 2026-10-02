@@ -4,7 +4,7 @@
 > **match transactions across sources, classify what cannot be matched, and
 > safely decide what to recover** — without ever letting an LLM touch money.
 
-[![tests](https://img.shields.io/badge/tests-153%20passing-brightgreen)](#)
+[![tests](https://img.shields.io/badge/tests-162%20passing-brightgreen)](#)
 [![python](https://img.shields.io/badge/python-3.10%2B-blue)](#)
 [![license](https://img.shields.io/badge/license-MIT-lightgrey)](#)
 [![mcp](https://img.shields.io/badge/MCP-compatible-purple)](#)
@@ -73,7 +73,7 @@ From `python eval.py` (default = 3000 transactions, seed=42, deterministic):
 | **F1** | **0.805** |
 | Audit events recorded | **3013** |
 | Audit chain integrity | **OK** |
-| Test suite | **153 / 153 passing** in ~10 s |
+| Test suite | **162 / 162 passing** in ~10 s |
 
 Reproducible — re-run produces identical numbers (seed=42).
 
@@ -103,7 +103,7 @@ cp .env.example .env
 # edit .env with your OPENAI_BASE_URL / OPENAI_API_KEY / OPENAI_MODEL
 # defaults work against kilo.ai's free tier
 
-# 3. Run the offline test suite (153 tests, no network)
+# 3. Run the offline test suite (162 tests, no network)
 PYTHONPATH=. python -m pytest
 
 # 4. Run the eval pipeline
@@ -131,7 +131,7 @@ open http://localhost:8300
 recoup/
 ├── src/            # pipeline + audit + policy + MCP
 ├── fixtures/       # deterministic 3000-txn generator
-├── tests/          # 153 tests
+├── tests/          # 162 tests
 ├── web/            # web dashboard assets
 └── scripts/        # e2e smoke tests
 ```
@@ -180,12 +180,9 @@ recoup/
 │   └── dashboard.py            # Rich-text CLI dashboard
 ├── fixtures/
 │   └── generate_dataset.py     # deterministic synthetic txn generator
-├── tests/                      # 153 offline tests (pytest)
+├── tests/                      # 162 offline tests (pytest)
 └── docs/
     ├── limitations.md          # what Recoup does NOT do (required reading)
-    ├── CRITIQUE_BRIEF.md       # external critique notes
-    ├── OPENCODE_PROMPT.md      # session context
-    └── SESSION_CONTEXT.md      # session context
 ```
 
 ---
@@ -241,7 +238,7 @@ Read [`docs/limitations.md`](docs/limitations.md) for the full list. Summary:
 
 ```bash
 PYTHONPATH=. python -m pytest
-# 153 passed in ~10s
+# 162 passed in ~10s
 ```
 
 Tests are offline by default — `tests/conftest.py` forces the LLM provider to `StubProvider()` so the suite is deterministic and fast. The live provider is exercised in `scripts/live_llm_smoke.py`.
