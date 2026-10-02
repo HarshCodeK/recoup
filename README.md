@@ -1,254 +1,222 @@
 # Recoup — Deterministic Multi-Source Reconciliation Control Plane
 
-> A payment-reconciliation control plane for fintech ops teams that need to
-> **match transactions across sources, classify what cannot be matched, and
-> safely decide what to recover** — without ever letting an LLM touch money.
+> A reconciliation control plane for fintech operations: normalize transactions,
+> match across sources, classify exceptions, and propose policy-gated recovery
+> actions — without giving an LLM authority to move money.
 
-[![tests](https://img.shields.io/badge/tests-162%20passing-brightgreen)](#)
-[![python](https://img.shields.io/badge/python-3.10%2B-blue)](#)
-[![license](https://img.shields.io/badge/license-MIT-lightgrey)](#)
-[![mcp](https://img.shields.io/badge/MCP-compatible-purple)](#)
-
----
+[![tests](https://img.shields.io/badge/tests-162%20passing-brightgreen)](#tests)
+[![python](https://img.shields.io/badge/python-3.10%2B-blue)](#quickstart)
+[![license](https://img.shields.io/badge/license-MIT-lightgrey)](#license)
+[![mcp](https://img.shields.io/badge/MCP-compatible-purple)](#the-5-mcp-tools)
 
 ## What this actually is
 
-**Recoup** is a working control plane built for the Razorpay AI Builder
-challenge (Track 4 — multi-source reconciliation). It is **not** a
-wrapper around an LLM, **not** a fintech demo with hand-wavy numbers, and
-**not** an agent that performs money actions.
-
-The flow is end-to-end and real:
+Recoup is a working control-plane implementation for multi-source payment
+reconciliation. The core pipeline is deterministic first and probabilistic
+second:
 
 ```
-                  5 sources (UPI / netbanking / card / wallet / ledger)
-                                       │
-                                       ▼
-                ┌──────────────────────────────────────┐
-                │  normalizer   →   rule engine        │  ← deterministic
-                │  match engine →   exception class.   │     safe-to-be-wrong layers
-                └──────────────────────────────────────┘
-                                       │ ambiguous (819 / 3000 in eval)
-                                       ▼
-                ┌──────────────────────────────────────┐
-                │  LLM triage  (classify-only, no     │  ← can be wrong safely
-                │  tool use, no money authority)       │
-                └──────────────────────────────────────┘
-                                       │
-                                       ▼
-                ┌──────────────────────────────────────┐
-                │  policy engine (floor / cap / black- │  ← must be right
-                │  list)   →   recovery (gated)        │
-                └──────────────────────────────────────┘
-                                       │
-                                       ▼
-                ┌──────────────────────────────────────┐
-                │  state machine   →   audit chain     │  ← append-only,
-                │  (UNKNOWN first-class state)        │     hash-chained SQLite
-                └──────────────────────────────────────┘
+5 source shapes
+    |
+    v
+normalize -> deterministic rules -> bounded probabilistic matching
+    |                         |
+    +-------------------------+---- unmatched
+                                      |
+                                      v
+                              typed exception reasons
+                                      |
+                                      v
+                              LLM triage (ambiguous only)
+                                      |
+                                      v
+                              recovery proposal
+                                      |
+                                      v
+                         deterministic policy gate
+                                      |
+                                      v
+                         state / audit infrastructure
 ```
 
-The pipeline is designed so deterministic policy/state controls constrain recovery, while the LLM only provides typed triage. The evaluation writes key match, exception, and diagnosis events to an append-only, SHA-256 hash-chained audit store.
+The LLM only classifies ambiguous exceptions. Its output is schema-validated
+and low-confidence output becomes `REFUSED`. Recovery proposals are created
+by deterministic mappings and then checked by the policy engine; there is no
+outbound money-execution path in this repository.
 
----
+## What is measured
 
-## Real numbers (measured, reproducible)
+The included evaluation is deterministic and uses a synthetic 3,000-transaction
+dataset with `seed=42`.
 
-The pair-level matching metrics must be regenerated with the current evaluator; the older transaction-level figures are intentionally not carried forward.
-
-From `python eval.py` (default = 3000 transactions, seed=42, deterministic):
-
-| Metric | Value |
-|---|---|
+| Metric | Current recorded value |
+|---|---:|
 | Total transactions | **3000** |
-| Ground-truth match pairs | 600 |
-| Auto-match rate (rule + prob.) | **32.43%** (973 / 3000) |
-| Exceptions (could not auto-match) | 1221 (40.7%) |
-| Ambiguous (escalated to LLM triage) | **819** |
-| Recovery proposed | 823 |
-| Recovery **allowed** by policy | **292** (35.5% of proposed) |
-| Recovery **blocked** by policy | **531** (64.5% of proposed) |
-| **Pair precision vs ground truth** | **regenerate with current `python eval.py`** |
-| **Pair recall vs ground truth** | **regenerate with current `python eval.py`** |
-| **Pair F1** | **regenerate with current `python eval.py`** |
-| Audit events recorded | **3013** |
-| Audit chain integrity | **OK** |
-| Test suite | **162 / 162 passing** in ~10 s |
+| Ground-truth match pairs | **600** |
+| Auto-match rate (rule + probabilistic) | **32.43%** (973 / 3000) |
+| Exceptions | **1221** (40.7%) |
+| Ambiguous exceptions | **819** |
+| Recovery proposals | **823** |
+| Policy-allowed proposals | **292** |
+| Policy-blocked proposals | **531** |
+| Audit events written by the evaluator | **3013** |
+| Offline tests | **162** |
 
-Reproducible — re-run produces identical numbers (seed=42).
-
----
+The current evaluator computes **pair-level** precision, recall, and F1. Older
+transaction-ID coverage figures such as `0.674 / 0.999 / 0.805` are retired and
+must not be quoted as current pair-level metrics. Run `PYTHONPATH=. python eval.py`
+to regenerate the current figures.
 
 ## What Recoup does
 
-- **Normalizes** transactions from 5 source shapes (UPI, netbanking, card, wallet, ledger) into a single canonical model. Integer paise everywhere; no float drift.
-- **Auto-matches** using a deterministic rule engine + a bounded probabilistic engine (Jaccard on reference tokens).
-- **Classifies** what cannot be auto-matched into typed reasons (`amount_mismatch`, `missing_reference`, `timing_window`, `duplicate_fire`, `missing_txn`, `ambiguous`, `standalone_recurring`).
-- **Triages ambiguous cases with an LLM** — typed, schema-enforced, never tools, never money authority. Refuses honestly if uncertain.
-- **Gates recovery with a policy engine** — economic floor (₹100), max cap (₹10,000), and reason blacklist.
-- **Persists state in an FSM** where `UNKNOWN` is first-class (never silently retried).
-- **Records everything** in a SHA-256 hash-chained SQLite audit log; tampering is detected by `verify_chain()`.
-- **Exposes 5 tools over MCP** (JSON-RPC 2.0 over stdio) for an external agent to drive the pipeline.
-
----
+- **Normalizes** UPI, netbanking, card, wallet, and ledger-shaped records into a
+  canonical transaction model. Money is represented as integer paise.
+- **Auto-matches** with a deterministic rule engine followed by a bounded
+  probabilistic matcher using reference-token similarity.
+- **Classifies exceptions** into typed reasons such as amount mismatch, missing
+  reference, timing window, duplicate fire, missing transaction, ambiguity, and
+  recurring standalone records.
+- **Triages only ambiguous exceptions with an LLM.** The model receives bounded
+  structured evidence, cannot call tools, and cannot issue recovery commands.
+- **Proposes recovery deterministically.** `recovery.py` maps an exception
+  reason to an action type; `policy_engine.py` independently decides whether
+  the proposal is allowed.
+- **Applies explicit recovery limits.** The current defaults are a ₹100 minimum,
+  a ₹10,000 maximum, a maximum of 3 recovery attempts per event, and a
+  one-hour cooldown configuration.
+- **Provides an FSM and audit infrastructure.** `state_engine.py` constrains
+  legal transaction transitions; `event_store.py` provides an append-only,
+  SHA-256 hash-chained SQLite log with chain verification.
+- **Exposes five MCP tools** over JSON-RPC 2.0/stdio so an external agent can
+  drive reconciliation, inspect exceptions, replay a transaction timeline,
+  test a recovery proposal, and verify the audit chain.
+- **Includes a zero-dependency web dashboard** in `src/web_dashboard.py` for
+  local inspection and re-running the synthetic demo.
 
 ## Quickstart
 
 ```bash
-# 1. Install
 pip install -r requirements.txt
 
-# 2. (Optional) wire a real LLM for ambiguous triage
-cp .env.example .env
-# edit .env with your OPENAI_BASE_URL / OPENAI_API_KEY / OPENAI_MODEL
-# defaults work against kilo.ai's free tier
-
-# 3. Run the offline test suite (162 tests, no network)
+# Run the offline suite
 PYTHONPATH=. python -m pytest
 
-# 4. Run the eval pipeline
+# Run the deterministic evaluation
 PYTHONPATH=. python eval.py
 
-# 5. Run the day-1 rule-engine demo (no LLM, no DB)
+# Run the day-1 rule-engine demo
 PYTHONPATH=. python demo_day1.py
 
-# 6. (Optional) verify the LLM is wired against your gateway
+# Optional: exercise the configured live LLM provider
 PYTHONPATH=. python scripts/live_llm_smoke.py
 
-# 7. (Optional) run the MCP server
+# Optional: start the MCP server
 PYTHONPATH=. python -m src.mcp_server
 
-# 8. (Optional) run the web dashboard
+# Optional: start the local web dashboard
 PYTHONPATH=. python -m src.web_dashboard
-open http://localhost:8300
+# open http://localhost:8300
 ```
 
----
+The default evaluation uses `StubProvider()` for repeatability. It does not
+require a network or a real LLM.
 
 ## Repository layout
 
 ```
 recoup/
-├── src/            # pipeline + audit + policy + MCP
-├── fixtures/       # deterministic 3000-txn generator
-├── tests/          # 162 tests
-├── web/            # web dashboard assets
-└── scripts/        # e2e smoke tests
-```
-
----
-
-## Web dashboard
-
-A zero-dependency web dashboard serves the audit trail with live refresh:
-
-```
-PYTHONPATH=. python -m src.web_dashboard
-# opens http://localhost:8300
-```
-
-Shows: pipeline stats, audit trail (last 50 events), exception breakdown,
-and a one-click "Re-run demo" that regenerates 3,000 transactions and
-recomputes the full chain.
-
----
-
-## What Recoup does NOT do
-recoup/
-├── README.md                   # this file
-├── pyproject.toml              # project metadata + tool config
-├── requirements.txt            # pydantic, rich, httpx, etc.
-├── .env.example                # template for LLM env config
-├── eval.py                     # end-to-end pipeline eval (3000 txns)
-├── demo_day1.py                # rule-engine demo, no LLM, no DB
-├── scripts/
-│   └── live_llm_smoke.py       # verify LLM provider wiring end-to-end
 ├── src/
-│   ├── data_model.py           # Pydantic models — money in paise (int)
-│   ├── normalizer.py           # 5 source shapes → canonical txn
-│   ├── rule_engine.py          # deterministic match rules
-│   ├── match_engine.py         # probabilistic Jaccard match
-│   ├── exception_classifier.py # typed reason classification
-│   ├── diagnosis.py            # LLM triage (typed, refuse-capable)
-│   │                           #   + OpenAICompatibleProvider (kilo, etc.)
-│   ├── policy_engine.py        # recovery gates (floor / cap / blacklist)
-│   ├── recovery.py             # policy-gated recovery actions
-│   ├── state_engine.py         # FSM with UNKNOWN as first-class
-│   ├── event_store.py          # SHA-256 hash-chained SQLite audit log
-│   ├── mcp_server.py           # JSON-RPC 2.0 MCP server (5 tools)
-│   ├── orchestrator.py         # pipeline glue
-│   └── dashboard.py            # Rich-text CLI dashboard
+│   ├── data_model.py
+│   ├── normalizer.py
+│   ├── rule_engine.py
+│   ├── match_engine.py
+│   ├── exception_classifier.py
+│   ├── diagnosis.py
+│   ├── policy_engine.py
+│   ├── recovery.py
+│   ├── state_engine.py
+│   ├── event_store.py
+│   ├── mcp_server.py
+│   ├── web_dashboard.py
+│   └── orchestrator.py
 ├── fixtures/
-│   └── generate_dataset.py     # deterministic synthetic txn generator
-├── tests/                      # 162 offline tests (pytest)
+│   └── generate_dataset.py
+├── scripts/
+│   └── live_llm_smoke.py
+├── tests/
+├── eval.py
 └── docs/
-    ├── limitations.md          # what Recoup does NOT do (required reading)
+    ├── INTERVIEW_QA.md
+    └── limitations.md
 ```
-
----
 
 ## The 5 MCP tools
 
-Run with `python -m src.mcp_server`. JSON-RPC 2.0 over stdio.
+Run `PYTHONPATH=. python -m src.mcp_server`.
 
 | Tool | Purpose |
 |---|---|
-| `reconcile_batch` | Run the full pipeline on a synthetic dataset; return auto-match rate + exception breakdown + audit chain status. |
-| `get_exceptions` | Return the unresolved transactions with typed reasons. |
-| `replay_txn` | Return the real audit-event timeline for a transaction. Reads from the persistent event store, **not** hardcoded. |
-| `propose_recovery` | Test whether a recovery action would be allowed by policy. **Does not** execute. |
-| `verify_audit_chain` | Walk the hash chain end-to-end; return `chain_ok` + `broken_at_seq` (or null). |
-
-A one-liner smoke test:
-
-```bash
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"reconcile_batch","arguments":{"dataset_size":50}}}' \
-  | python -m src.mcp_server
-```
-
----
+| `reconcile_batch` | Run reconciliation on a deterministic synthetic dataset and return matching/exception/audit results. |
+| `get_exceptions` | Return unresolved transactions with typed exception reasons. |
+| `replay_txn` | Return the persistent audit-event timeline for a transaction. |
+| `propose_recovery` | Test whether a recovery proposal would pass deterministic policy. **It does not execute the action.** |
+| `verify_audit_chain` | Verify the SHA-256 event chain and report where it breaks, if anywhere. |
 
 ## Trust boundaries — the load-bearing claims
 
-These are the design choices that separate "I used an LLM" from "I thought
-about money." If you only have 30 seconds, read this section.
+1. **The LLM cannot move money.** `diagnosis.py` is a classify-only interface.
+   It rejects tool/function use by construction of the provider call, validates
+   the result, and turns malformed or low-confidence output into `REFUSED`.
+2. **Money is integer paise.** Financial amounts use integer paise in the data
+   model and policy calculations; INR floats are presentation-only.
+3. **Recovery is policy-gated.** The LLM does not choose the recovery action and
+   cannot override the deterministic policy engine.
+4. **State transitions are explicit.** `state_engine.py` defines the legal FSM
+   transitions, including `UNKNOWN`, rather than silently retrying unknown
+   transactions.
+5. **The audit store is tamper-evident, not magically immutable.** Each event
+   hash includes the previous event hash, and `verify_chain()` detects
+   subsequent tampering. The surrounding application still has to use the store
+   consistently for an execution path to be fully audited.
+6. **The evaluation is synthetic.** Its numbers show behavior on the included
+   generator, not production performance on live payment traffic.
 
-1. **The LLM cannot move money.** `diagnosis.py` rejects tool use, function calling, and network calls. Its output is parsed through a typed Pydantic schema and a confidence floor (0.5). Below that floor, the diagnosis is `REFUSED` and the txn is escalated to human review.
-2. **Money is integer paise everywhere.** No `float` in any money code path. Pydantic models reject `float` for `amount_paise`.
-3. **`UNKNOWN` is a first-class state.** The state machine has terminal `UNKNOWN` and `EXCEPTION` states. The recovery layer never retries blindly.
-4. **The audit chain is append-only and tamper-evident.** Every event's SHA-256 hash includes the previous event's hash. `verify_chain()` walks the entire chain on demand. Tests confirm `tamper_for_testing()` causes `verify_chain()` to return `(False, broken_at_seq)`.
-5. **Policy gates are deterministic and explicit.** Floor, cap, reason blacklist, manual-approval threshold — all in `policy_engine.py`, all unit-tested.
-6. **The eval is reproducible.** Seed=42 produces identical numbers on every run.
+## Why the LLM is not in the recovery path
 
----
+This is the central design decision. The LLM answers a diagnostic question:
+“why could this transaction not be matched?” It does not answer “what money
+should I move?” Recovery proposals come from deterministic playbooks, and the
+policy engine applies the hard economic and safety constraints independently.
+
+That keeps the probabilistic component in a place where a wrong answer can be
+reviewed, instead of letting model output directly authorize a financial action.
+
+## Evaluation notes
+
+The headline non-pair metrics are reproducible from `eval.py`. The matching
+precision/recall/F1 calculation is pair-based: each predicted unordered
+transaction pair is compared with each ground-truth unordered pair.
+
+The evaluator also writes a bounded audit trace to an in-memory SQLite store.
+That trace covers match decisions, exception classifications, and LLM diagnoses;
+it should not be read as proof that every policy/state/recovery operation in a
+production run is automatically logged.
 
 ## Honest limitations
 
-Read [`docs/limitations.md`](docs/limitations.md) for the full list. Summary:
+Read [`docs/limitations.md`](docs/limitations.md) before presenting this as a
+production system.
 
-- Synthetic data only. No real Razorpay adapter (Razorpay test-mode adapter not built — see `docs/limitations.md`).
-- LLM route is wired but the eval run uses `StubProvider()` for repeatability. Use `scripts/live_llm_smoke.py` to exercise the live provider.
-- Probabilistic match uses bounded Jaccard on tokens — no learned embedding model. Good enough for synthetic; would need retraining on real data.
-- Dashboard is Rich-text CLI; no web UI.
-- Single-process, single-host. No horizontal scaling.
+The main gaps are: no live Razorpay/Stripe/bank adapter, no recovery execution
+path, no auth or rate limiting for the local MCP server, synthetic data only,
+single-process deployment assumptions, and an LLM diagnosis layer that is
+deliberately bounded rather than a general agent.
 
----
+## Interview preparation
 
-## Tests
-
-```bash
-PYTHONPATH=. python -m pytest
-# 162 passed in ~10s
-```
-
-Tests are offline by default — `tests/conftest.py` forces the LLM provider to `StubProvider()` so the suite is deterministic and fast. The live provider is exercised in `scripts/live_llm_smoke.py`.
-
-New tests added in this revision:
-
-- `tests/test_llm_provider.py` — 10 tests covering the OpenAI-compatible provider (mocked) + provider selection logic.
-- `tests/test_mcp_server.py` — rewritten to assert the singleton event-store persistence + replay-from-real-store behavior.
-
----
+[`docs/INTERVIEW_QA.md`](docs/INTERVIEW_QA.md) is written against the current
+code and focuses on the trust boundaries, evaluation methodology, and the
+tradeoffs an interviewer is most likely to probe.
 
 ## License
 
