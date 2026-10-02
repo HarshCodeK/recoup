@@ -8,11 +8,11 @@ required reading before drawing conclusions from the README or the eval report.
 | Capability | Status | Why |
 |---|---|---|
 | **Live Razorpay / Stripe / bank adapter** | Not implemented | The reconciliation pipeline consumes a `NormalizedTxn` schema. A real adapter would emit that schema from the source's webhook payload. The adapter boundary exists; no production connector is wired. |
-| **Persistent customer database** | Not implemented | Recoup is stateless across batches. All state lives in the audit log (SQLite, SHA-256 chained). No customers, no merchant accounts, no API keys stored. |
+| **Persistent customer database** | Not implemented | Recoup has no customer/merchant database. The MCP event store can persist audit events locally, while the reconciliation pipeline itself processes a supplied batch and does not provide a production customer-account data model. |
 | **Recovery execution** | **Never automatic** | `propose_recovery()` returns a proposal + an idempotency key. A human or downstream automation must approve and call the actual refund/initiate endpoint. The system has no outbound money path. |
 | **Multi-tenant / auth** | Not implemented | The MCP server has no token, no auth, no rate limit. It is a local stdio server. Running it on a public host requires an auth layer. |
-| **Production vector DB for retrieval** | Skipped | Diagnosis works on bounded sanitized context (≤ 20 sibling transactions). No embeddings, no semantic search. The exception → diagnosis path is a single LLM call. |
-| **Web UI / dashboard beyond CLI** | `src/dashboard.py` is a terminal Rich dashboard | No React / Next / Vite frontend. |
+| **Production vector DB for retrieval** | Skipped | Diagnosis works on bounded sanitized context; the prompt currently includes at most 5 sibling transaction summaries. No embeddings, no semantic search. The exception → diagnosis path is a single LLM call. |
+| **Production-grade web UI** | `src/web_dashboard.py` is a zero-dependency local HTTP dashboard | It is a local inspection/demo surface, not a production frontend or multi-user application. |
 
 ## Known design choices (not bugs, but worth saying)
 
