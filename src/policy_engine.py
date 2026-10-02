@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from src.data_model import NormalizedTxn, TransactionState, ExceptionReason, RecoveryAction
 
 
-# Hard caps (paise). Defaults are conservative for an MVP.
+# Recovery limits (paise). Defaults are conservative for an MVP.
 @dataclass(frozen=True)
 class PolicyConfig:
     max_recovery_amount_paise: int = 10_000_00  # ₹10,000
