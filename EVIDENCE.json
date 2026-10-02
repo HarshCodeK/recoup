@@ -11,8 +11,8 @@
   },
   "headline": [
     {
-      "label": "eval F1",
-      "value": "0.805",
+      "label": "pair-level eval",
+      "value": "pending rerun",
       "command": "PYTHONPATH=. python eval.py",
       "tone": "accent"
     },
@@ -36,18 +36,18 @@
       "command": "python -m pytest tests/ -q"
     },
     {
-      "metric": "eval precision (3000 txns, seed=42)",
-      "value": 0.674,
+      "metric": "pair-level precision (3000 txns, seed=42)",
+      "value": null,
       "command": "PYTHONPATH=. python eval.py"
     },
     {
-      "metric": "eval recall",
-      "value": 0.999,
+      "metric": "pair-level recall",
+      "value": null,
       "command": "PYTHONPATH=. python eval.py"
     },
     {
-      "metric": "eval F1",
-      "value": 0.805,
+      "metric": "pair-level F1",
+      "value": null,
       "command": "PYTHONPATH=. python eval.py"
     },
     {
@@ -56,5 +56,5 @@
       "command": "PYTHONPATH=. python eval.py"
     }
   ],
-  "source": "measured 2026-10-03"
+  "source": "evaluator corrected 2026-10-03; pair-level numeric metrics pending rerun"
 }
